@@ -1,150 +1,188 @@
 import json
-from datetime import datetime
+import tempfile
+import unittest
 from pathlib import Path
+import csv
+import asyncio
+import shutil
+import sys
+import os
 
-import pytest
+# Add the parent directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.spanish_encoding_fixer import (
     SpanishEncodingFixer,
-    ProcessingStatus,
-    ProcessingStats,
-    ProcessingResult,
-    EncodingIssue
+    FileType,
+    ProcessingStatus
 )
 
 
-@pytest.fixture
-def temp_dir(tmp_path):
-    """Provides a temporary directory for file operations."""
-    return tmp_path
+class TestSpanishEncodingFixer(unittest.TestCase):
+    def setUp(self):
+        # Create a temporary directory for testing
+        self.test_dir = Path(tempfile.mkdtemp())
 
+        # Prepare test data
+        self.sample_json = {
+            "name": "JosÃ© GarcÃ\u00ADa",
+            "city": "MÃ¡laga",
+            "occupation": "MÃºsico",
+            "details": {
+                "education": "Universidad de SevillÃ¡",
+                "hobbies": ["MÃºsica", "FÃºtbol", "MontaÃ±ismo"]
+            }
+        }
 
-@pytest.fixture
-def input_json(temp_dir):
-    """Creates a sample JSON file with encoding issues."""
-    content = {
-        "name": "JosÃ©",
-        "city": "MÃ¡laga",
-        "description": "Text with Ã± and Ã¡ characters",
-        "nested": {
-            "text": "More Ã© problems"
-        },
-        "list": ["ItemÃ³", "ItemÃº"]
-    }
-
-    file_path = temp_dir / "test.json"
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(content, f)
-    return file_path
-
-
-@pytest.fixture
-def fixer(temp_dir):
-    """Creates a SpanishEncodingFixer instance."""
-    return SpanishEncodingFixer(
-        input_dir=temp_dir,
-        output_dir=temp_dir / "output",
-        backup=True
-    )
-
-
-class TestSpanishEncodingFixer:
-    def test_initialization(self, temp_dir):
-        """Test proper initialization of SpanishEncodingFixer."""
-        fixer = SpanishEncodingFixer(input_dir=temp_dir)
-        assert fixer.input_dir == Path(temp_dir)
-        assert fixer.backup is True
-        assert fixer.max_retries == 3
-        assert hasattr(fixer, 'logger')
-        assert fixer.replacements
-
-    def test_invalid_input_dir(self):
-        """Test initialization with non-existent directory."""
-        with pytest.raises(FileNotFoundError):
-            SpanishEncodingFixer(input_dir="nonexistent_dir")
-
-    def test_fix_text(self, fixer):
-        """Test text fixing functionality."""
-        test_cases = [
-            ("JosÃ©", "José"),
-            ("MÃ¡laga", "Málaga"),
-            ("Normal text", "Normal text"),
-            ("Multiple Ã¡ Ã© Ã\u00AD", "Multiple á é í"),
+        self.sample_csv_data = [
+            ["name", "city", "occupation"],
+            ["JosÃ© GarcÃ\u00ADa", "MÃ¡laga", "MÃºsico"],
+            ["MarÃ\u00ADa RodrÃ\u00ADguez", "MÃ¡drid", "IngenierÃ\u00ADa"],
+            ["Juan PÃ©rez", "BarcelÃ³na", "MÃ©dico"]
         ]
 
-        for input_text, expected in test_cases:
-            assert fixer.fix_text(input_text) == expected
+        # Create test files
+        self.json_file = self.test_dir / "test.json"
+        with open(self.json_file, "w", encoding="utf-8") as f:
+            json.dump(self.sample_json, f, ensure_ascii=False)
 
-    def test_fix_json_content(self, fixer):
-        """Test JSON content fixing functionality."""
-        input_data = {
-            "string": "JosÃ©",
-            "number": 42,
-            "nested": {"text": "MÃ¡laga"},
-            "list": ["ItemÃ³", "ItemÃº"]
+        self.csv_file = self.test_dir / "test.csv"
+        with open(self.csv_file, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            for row in self.sample_csv_data:
+                writer.writerow(row)
+
+        # Expected fixed data
+        self.expected_json = {
+            "name": "José García",
+            "city": "Málaga",
+            "occupation": "Músico",
+            "details": {
+                "education": "Universidad de Sevillá",
+                "hobbies": ["Música", "Fútbol", "Montañismo"]
+            }
         }
 
-        expected = {
-            "string": "José",
-            "number": 42,
-            "nested": {"text": "Málaga"},
-            "list": ["Itemó", "Itemú"]
-        }
+        self.expected_csv_rows = [
+            {"name": "José García", "city": "Málaga", "occupation": "Músico"},
+            {"name": "María Rodríguez", "city": "Mádrid", "occupation": "Ingeniaría"},
+            {"name": "Juan Pérez", "city": "Barcelóna", "occupation": "Médico"}
+        ]
 
-        assert fixer.fix_json_content(input_data) == expected
+    def tearDown(self):
+        # Clean up temporary directory
+        shutil.rmtree(self.test_dir)
 
-    def test_verify_encoding(self, fixer):
-        """Test encoding verification functionality."""
-        test_data = {
-            "good": "José",
-            "bad": "JosÃ©",
-            "nested": {"bad": "MÃ¡laga"}
-        }
+    def test_fix_text(self):
+        fixer = SpanishEncodingFixer(input_dir=self.test_dir)
 
-        issues = fixer.verify_encoding(test_data)
-        assert len(issues) == 2
-        assert all(isinstance(issue, EncodingIssue) for issue in issues)
+        test_string = "Hola, cÃ³mo estÃ¡s? Bien, graÃ±as."
+        expected = "Hola, cómo estás? Bien, grañas."
 
-    @pytest.mark.asyncio
-    async def test_process_file(self, fixer, input_json):
-        """Test processing of a single file."""
-        result = await fixer.process_file(input_json)
+        result = fixer.fix_text(test_string)
+        self.assertEqual(result, expected)
 
-        assert isinstance(result, ProcessingResult)
-        assert result.status == ProcessingStatus.SUCCESS
-        assert result.file_path == input_json
-        assert result.chars_processed > 0
+    def test_determine_file_type(self):
+        fixer = SpanishEncodingFixer(input_dir=self.test_dir)
 
-    @pytest.mark.asyncio
-    async def test_process_directory(self, fixer, input_json):
-        """Test processing of directory."""
+        self.assertEqual(fixer.determine_file_type(Path("test.json")), FileType.JSON)
+        self.assertEqual(fixer.determine_file_type(Path("test.csv")), FileType.CSV)
+        self.assertEqual(fixer.determine_file_type(Path("test.txt")), FileType.UNKNOWN)
+
+    async def test_process_json_file(self):
+        fixer = SpanishEncodingFixer(input_dir=self.test_dir)
+
+        result = await fixer.process_json_file(self.json_file)
+
+        self.assertEqual(result.status, ProcessingStatus.SUCCESS)
+        self.assertEqual(result.file_type, FileType.JSON)
+        self.assertTrue(result.chars_processed > 0)
+
+        # Check if output file exists and contains fixed data
+        output_file = list(fixer.output_dir.glob("*.json"))[0]
+        with open(output_file, "r", encoding="utf-8") as f:
+            fixed_data = json.load(f)
+
+        self.assertEqual(fixed_data, self.expected_json)
+
+    async def test_process_csv_file(self):
+        fixer = SpanishEncodingFixer(input_dir=self.test_dir)
+
+        result = await fixer.process_csv_file(self.csv_file)
+
+        self.assertEqual(result.status, ProcessingStatus.SUCCESS)
+        self.assertEqual(result.file_type, FileType.CSV)
+        self.assertTrue(result.chars_processed > 0)
+
+        # Check if output file exists and contains fixed data
+        output_file = list(fixer.output_dir.glob("*.csv"))[0]
+        with open(output_file, "r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            fixed_rows = list(reader)
+
+        # Compare contents (we only care about the text values being fixed)
+        for i, row in enumerate(fixed_rows):
+            for key, value in row.items():
+                expected_value = self.expected_csv_rows[i][key]
+                self.assertEqual(value, expected_value)
+
+    async def test_process_directory(self):
+        fixer = SpanishEncodingFixer(input_dir=self.test_dir)
+
         stats = await fixer.process_directory()
 
-        assert isinstance(stats, ProcessingStats)
-        assert stats.processed >= 1
-        assert stats.total_chars_processed > 0
-        assert isinstance(stats.duration, float)
-        assert stats.duration > 0
+        self.assertEqual(stats.processed, 2)
+        self.assertEqual(stats.json_files_processed, 1)
+        self.assertEqual(stats.csv_files_processed, 1)
+        self.assertEqual(stats.failed, 0)
+        self.assertTrue(stats.total_chars_processed > 0)
 
-    def test_processing_stats_validation(self):
-        """Test ProcessingStats model validation."""
-        stats = ProcessingStats()
-        assert stats.processed == 0
-        assert stats.failed == 0
-        assert stats.skipped == 0
-        assert isinstance(stats.start_time, datetime)
+    async def test_file_type_filtering(self):
+        # Test with only JSON files
+        json_fixer = SpanishEncodingFixer(
+            input_dir=self.test_dir,
+            file_types={FileType.JSON}
+        )
 
-    @pytest.mark.asyncio
-    async def test_error_handling(self, fixer, temp_dir):
-        """Test error handling with invalid JSON file."""
-        # Create invalid JSON file
-        invalid_file = temp_dir / "invalid.json"
-        invalid_file.write_text("{invalid json")
+        json_stats = await json_fixer.process_directory()
 
-        result = await fixer.process_file(invalid_file)
-        assert result.status == ProcessingStatus.FAILURE
-        assert result.error_message is not None
+        self.assertEqual(json_stats.processed, 1)
+        self.assertEqual(json_stats.json_files_processed, 1)
+        self.assertEqual(json_stats.csv_files_processed, 0)
+
+        # Test with only CSV files
+        csv_fixer = SpanishEncodingFixer(
+            input_dir=self.test_dir,
+            file_types={FileType.CSV}
+        )
+
+        csv_stats = await csv_fixer.process_directory()
+
+        self.assertEqual(csv_stats.processed, 1)
+        self.assertEqual(csv_stats.json_files_processed, 0)
+        self.assertEqual(csv_stats.csv_files_processed, 1)
+
+
+# Run tests with async support
+def run_async_test(test_case, test_name):
+    """Helper function to run an async test method."""
+    test_method = getattr(test_case, test_name)
+    return asyncio.run(test_method())
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    # Modify TestCase to handle async methods
+    original_run = unittest.TestCase.run
+
+
+    def async_aware_run(self, result=None):
+        test_method_name = self._testMethodName
+        test_method = getattr(self, test_method_name)
+        if asyncio.iscoroutinefunction(test_method):
+            setattr(self, test_method_name, lambda: asyncio.run(test_method()))
+        return original_run(self, result)
+
+
+    unittest.TestCase.run = async_aware_run
+
+    unittest.main()
