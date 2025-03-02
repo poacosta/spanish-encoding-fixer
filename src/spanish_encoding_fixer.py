@@ -122,11 +122,100 @@ class SpanishEncodingFixer:
 
     def _load_replacements(self) -> None:
         """Load encoding replacement mappings with validation."""
+        # Latin-1 and Latin Extended-A characters with encoding issues
         self.replacements = {
-            'Ã¡': 'á', 'Ã©': 'é', 'Ã\u00AD': 'í', 'Ã³': 'ó',
-            'Ãº': 'ú', 'Ã±': 'ñ', 'Ã\u0081': 'Á', 'Ã‰': 'É',
-            'Ã\u008d': 'Í', 'Ã"': 'Ó', 'Ãš': 'Ú', 'Ã\'': 'Ñ',
-            'Ã¼': 'ü', 'Ãœ': 'Ü', 'Âª': 'ª', 'Â´': '´', 'Â°': '°'
+            # Lowercase accented vowels
+            'Ã¡': 'á',  # á
+            'Ã¢': 'â',  # â
+            'Ã£': 'ã',  # ã
+            'Ã¤': 'ä',  # ä
+            'Ã¥': 'å',  # å
+            'Ã¦': 'æ',  # æ
+            'Ã©': 'é',  # é
+            'Ãª': 'ê',  # ê
+            'Ã«': 'ë',  # ë
+            'Ã¬': 'ì',  # ì
+            'Ã\u00AD': 'í',  # í (alternative encoding)
+            'Ã®': 'î',  # î
+            'Ã¯': 'ï',  # ï
+            'Ã²': 'ò',  # ò
+            'Ã³': 'ó',  # ó
+            'Ã´': 'ô',  # ô
+            'Ãµ': 'õ',  # õ
+            'Ã¶': 'ö',  # ö
+            'Ã¸': 'ø',  # ø
+            'Ã¹': 'ù',  # ù
+            'Ãº': 'ú',  # ú
+            'Ã»': 'û',  # û
+            'Ã¼': 'ü',  # ü
+            'Ã½': 'ý',  # ý
+            'Ã¿': 'ÿ',  # ÿ
+
+            # Uppercase accented vowels
+            'Ã€': 'À',  # À
+            'Ã\u0081': 'Á',  # Á
+            'Ã‚': 'Â',  # Â
+            'Ãƒ': 'Ã',  # Ã
+            'Ã„': 'Ä',  # Ä
+            'Ã…': 'Å',  # Å
+            'Ã†': 'Æ',  # Æ
+            'Ãˆ': 'È',  # È
+            'Ã‰': 'É',  # É
+            'ÃŠ': 'Ê',  # Ê
+            'Ã‹': 'Ë',  # Ë
+            'ÃŒ': 'Ì',  # Ì
+            'Ã\u008d': 'Í',  # Í
+            'ÃŽ': 'Î',  # Î
+            'ÃŸ': 'ß',  # ß
+            'Ã"': 'Ó',  # Ó
+            'Ã\'': 'Ñ',  # Ñ
+            'Ã•': 'Õ',  # Õ
+            'Ã–': 'Ö',  # Ö
+            'Ã˜': 'Ø',  # Ø
+            'Ã™': 'Ù',  # Ù
+            'Ãš': 'Ú',  # Ú
+            'Ã›': 'Û',  # Û
+            'Ãœ': 'Ü',  # Ü
+            'Ãž': 'Þ',  # Þ
+            'Ã¾': 'þ',  # þ
+
+            # Special letters
+            'Ã§': 'ç',  # ç
+            'Ã‡': 'Ç',  # Ç
+            'Ã±': 'ñ',  # ñ
+            'Ã°': 'ð',  # ð
+
+            # Symbols and other characters
+            'Âª': 'ª',  # ª (feminine ordinal)
+            'Âº': 'º',  # º (masculine ordinal)
+            'Â´': '´',  # ´ (acute accent)
+            'Â°': '°',  # ° (degree symbol)
+            'Â¿': '¿',  # ¿ (inverted question mark)
+            'Â¡': '¡',  # ¡ (inverted exclamation mark)
+            'Â£': '£',  # £ (pound sign)
+            'Â¢': '¢',  # ¢ (cent sign)
+            'Â¤': '¤',  # ¤ (currency sign)
+            'Â¥': '¥',  # ¥ (yen sign)
+            'Â©': '©',  # © (copyright sign)
+            'Â®': '®',  # ® (registered trademark)
+            'Â§': '§',  # § (section sign)
+            'Â¨': '¨',  # ¨ (diaeresis)
+            'Â¦': '¦',  # ¦ (broken bar)
+            'Â«': '«',  # « (left-pointing double angle quotation mark)
+            'Â»': '»',  # » (right-pointing double angle quotation mark)
+            'Â¬': '¬',  # ¬ (not sign)
+            'Â¯': '¯',  # ¯ (macron)
+            'Â²': '²',  # ² (superscript two)
+            'Â³': '³',  # ³ (superscript three)
+            'Â¹': '¹',  # ¹ (superscript one)
+            'Â¼': '¼',  # ¼ (fraction one quarter)
+            'Â½': '½',  # ½ (fraction one half)
+            'Â¾': '¾',  # ¾ (fraction three quarters)
+            'Â·': '·',  # · (middle dot)
+            'Â±': '±',  # ± (plus-minus sign)
+            'Â×': '×',  # × (multiplication sign)
+            'Â÷': '÷',  # ÷ (division sign)
+            'Â µ': 'µ'  # µ (micro sign)
         }
 
         # Validate replacements
